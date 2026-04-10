@@ -1,0 +1,120 @@
+17:36:02  INFO      Loading workbook: ..\1st lot KS Connection.xlsx
+17:36:02  INFO      Loaded 399 leads
+17:36:02  INFO      Starting enrichment for 399 leads
+17:36:02  INFO      Scraping: OFF  |  0 profiles queued
+17:36:02  INFO      Running classifiers …
+17:36:02  INFO      Wrote 399 rows → C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\enriched_leads.csv
+17:36:50  INFO      Loading workbook: ..\1st lot KS Connection.xlsx
+17:36:50  INFO      Loaded 399 leads
+17:36:50  INFO      Starting enrichment for 399 leads
+17:36:50  INFO      Scraping: OFF  |  0 profiles queued
+17:36:50  INFO      Running classifiers …
+17:36:50  INFO      Wrote 399 rows -> C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\enriched_leads.csv
+17:36:50  INFO      Done. 399 enriched  |  0 failed  |  output -> enriched_leads.csv
+17:43:21  INFO      Loading workbook: ..\1st lot KS Connection.xlsx
+17:43:21  INFO      Loaded 399 leads
+17:43:21  INFO      Starting enrichment for 399 leads
+17:43:21  INFO      SCRAPE_ENABLED=False — using existing Excel data only
+17:43:21  INFO      Running classifiers ...
+17:43:21  INFO      Wrote 399 rows -> C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\enriched_leads.csv
+17:43:21  INFO      Done. 399 leads enriched -> enriched_leads.csv
+17:43:31  INFO      Loading workbook: ..\1st lot KS Connection.xlsx
+17:43:31  INFO      Loaded 399 leads
+17:43:31  INFO      Starting enrichment for 399 leads
+17:43:31  ERROR     APIFY_API_TOKEN is not set.
+  Create a .env file in the project root with:
+    APIFY_API_TOKEN=apify_api_xxxx
+  Or run:  set APIFY_API_TOKEN=apify_api_xxxx  (Windows)
+  Skipping scrape phase.
+17:43:31  INFO      Running classifiers ...
+17:43:31  INFO      Wrote 399 rows -> C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\enriched_leads.csv
+17:43:31  INFO      Done. 399 leads enriched -> enriched_leads.csv
+17:50:45  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:52:28  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:52:28  INFO      Loading workbook: C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\1st lot KS Connection.xlsx
+17:52:28  INFO      Loaded 399 leads
+17:52:28  INFO      Starting enrichment for 399 leads
+17:52:28  INFO      SCRAPE_MISSING_ONLY=True: 310/399 leads have missing fields
+17:52:28  ERROR     Apify scraping failed: No module named 'requests'
+Traceback (most recent call last):
+  File "C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\pipeline.py", line 171, in run
+    from apify_scraper import scrape_profiles_batch, enrich_lead_from_apify
+  File "C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\apify_scraper.py", line 34, in <module>
+    import requests
+ModuleNotFoundError: No module named 'requests'
+17:52:28  INFO      Running classifiers ...
+17:52:28  INFO      Wrote 399 rows -> C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\enriched_leads.csv
+17:52:28  INFO      Done. 399 leads enriched -> enriched_leads.csv
+17:55:10  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:55:10  INFO      Loading workbook: C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\1st lot KS Connection.xlsx
+17:55:11  INFO      Loaded 399 leads
+17:55:11  INFO      Starting enrichment for 399 leads
+17:55:11  INFO      SCRAPE_MISSING_ONLY=True: 310/399 leads have missing fields
+17:55:11  INFO      Submitting 310 URLs to Apify ...
+17:55:11  INFO      Submitting 310 URLs to Apify in batches of 50
+17:55:11  INFO      === Apify batch 1/7 (50 URLs) ===
+17:55:12  ERROR     Batch 1 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:12  INFO      === Apify batch 2/7 (50 URLs) ===
+17:55:13  ERROR     Batch 2 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:13  INFO      === Apify batch 3/7 (50 URLs) ===
+17:55:15  ERROR     Batch 3 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:15  INFO      === Apify batch 4/7 (50 URLs) ===
+17:55:16  ERROR     Batch 4 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:16  INFO      === Apify batch 5/7 (50 URLs) ===
+17:55:17  ERROR     Batch 5 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:17  INFO      === Apify batch 6/7 (50 URLs) ===
+17:55:18  ERROR     Batch 6 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:18  INFO      === Apify batch 7/7 (10 URLs) ===
+17:55:20  ERROR     Batch 7 failed: Failed to start Apify run: 404 {
+  "error": {
+    "type": "record-not-found",
+    "message": "Actor was not found"
+  }
+}
+17:55:20  INFO      Apify scraping complete: 0/310 profiles returned data
+17:55:20  WARNING   Logged 310 failed URLs -> C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\linkedin_pipeline\failed_profiles.log
+17:55:20  INFO      Running classifiers ...
+17:56:39  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:57:21  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:57:55  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:58:36  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:59:24  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+17:59:50  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:00:28  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:00:50  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:01:02  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:01:38  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:01:56  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:02:25  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:03:27  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env
+18:06:35  INFO      Loaded environment from C:\Users\sahana\Desktop\ECE\AI_Growth_Strategist\backend\.env

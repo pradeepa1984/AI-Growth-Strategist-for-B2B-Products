@@ -1,0 +1,107 @@
+ ---
+  What is AI Growth Strategist?
+
+  It's a B2B AI-powered growth intelligence platform. You give it a company website URL — it figures out everything about that company's market position and tells you
+  where to grow, what to write about, who to target, and who your competitors are. No manual research needed.
+
+  ---
+  High Level — The Big Idea
+
+  Sales and marketing teams today juggle 5–6 disconnected tools:
+  - One tool to understand their positioning
+  - Another for SEO keywords
+  - Another for content ideas
+  - Another for finding leads
+
+  This system replaces all of that with a single automated pipeline:
+
+  Company Website URL
+         ↓
+  Website Intelligence  →  understand what the company does
+         ↓
+  Human Approval        →  verify the AI got it right
+         ↓
+  Market Intelligence   →  generate growth strategy
+         ↓
+  Lead Discovery        →  find real companies to sell to
+         ↓
+  UI Dashboard          →  display everything cleanly
+
+  The core insight: if you can accurately understand a company from its website, everything downstream (content, SEO, leads, strategy) can be automated.
+
+  ---
+  Low Level — What Each Module Actually Does
+
+  1. Website Intelligence
+
+  - Takes a URL → calls Firecrawl to scrape and convert the website into clean markdown
+  - Sends that markdown to Claude (Haiku via AWS Bedrock) with a structured prompt
+  - Claude extracts: company summary, industry, services, ICP (who they sell to), keywords
+  - Computes a confidence score — if too low, it crawls more pages and retries (iterative crawling)
+  - Result is stored in DynamoDB (structured) and S3 (raw markdown)
+  - A human reviews and approves the result before it moves forward — this is the human-in-the-loop gate
+
+  2. Market Intelligence (the module you've been building)
+
+  - Requires approved Website Intelligence as input — won't run without it
+  - Makes two LLM calls to Claude:
+    a. Generates: keyword clusters, content topics, target segments, top competitors
+    b. Generates: multi-scale market expansion strategy (global + India-specific cities)
+  - The strategy has 3 tiers — Large Scale (enterprise), Mid Scale (regional), Small Scale (niche)
+  - A best fit scale is deterministically inferred from ICP keywords
+  - Schema validation with one retry ensures the output is always structurally correct
+
+  3. Lead Discovery (planned/partial)
+
+  - Uses the ICP, industry, and services from Website Intelligence
+  - Queries Apollo.io to find real companies that match the profile
+  - Returns a list of potential leads to target
+
+  ---
+  Technology Stack
+
+  ┌────────────────────┬────────────────────────────┬──────────────────────────────────────────────────┐
+  │       Layer        │         Technology         │                       Why                        │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Backend            │ Python + FastAPI           │ Fast async API, clean Pydantic validation        │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Frontend           │ React 19 + Vite            │ Fast dev build, component-based UI               │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Styling            │ Tailwind CSS               │ Utility-first, consistent design system          │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ LLM                │ Claude Haiku (AWS Bedrock) │ Fast, cheap, structured JSON output              │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Web Crawling       │ Firecrawl API              │ Converts any website to clean markdown reliably  │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Structured Storage │ AWS DynamoDB               │ Key-value store for company intelligence records │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Raw Storage        │ AWS S3                     │ Stores full crawled markdown and LLM responses   │
+  ├────────────────────┼────────────────────────────┼──────────────────────────────────────────────────┤
+  │ Auth/Cloud         │ AWS (IAM profile)          │ Website-intel-dev profile handles all AWS calls  │
+  └────────────────────┴────────────────────────────┴──────────────────────────────────────────────────┘
+
+  ---
+  What makes it different from a simple ChatGPT wrapper
+
+  Three things:
+
+  1. Grounded in real data — Claude only sees content scraped from the actual company website, so it can't hallucinate company facts. The intelligence is always anchored
+  to what the company actually says about itself.
+  2. Human-in-the-loop gate — Market Intelligence won't run on unapproved data. A human must verify the Website Intelligence output first. This prevents
+  garbage-in-garbage-out.
+  3. Caching layer — Once a company is analysed and approved, results are stored in DynamoDB. Re-running the same URL doesn't trigger a new crawl or LLM call unless
+  forced — saves cost and time.
+
+  ---
+  Current State vs Vision
+
+  Built (MVP):
+  - Website Intelligence with iterative crawling + approval
+  - Market Intelligence with keyword clusters, content topics, competitors, market strategy
+
+  Planned:
+  - Lead Discovery via Apollo
+  - SEO APIs (Ahrefs / SEMrush) for real keyword data
+  - Multi-agent orchestration (LangGraph)
+  - Campaign automation
+  - Analytics dashboard

@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+boto3
+firecrawl-py
+pydantic
+requests
+python-jose[cryptography]
