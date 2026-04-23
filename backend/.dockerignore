@@ -1,0 +1,15 @@
+# Local virtual environment — never copy into image
+aivenv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local secrets — credentials must come from ECS Task Definition env vars
+.env
+
+# Git
+.git/
+.gitignore
