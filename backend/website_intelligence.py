@@ -32,6 +32,16 @@ ADDITIONAL_PATHS = [
     "/offerings",
 ]
 
+# Crawled separately (dedicated location pass) — not counted against MAX_PAGES
+LOCATION_PATHS = [
+    "/contact",
+    "/contact-us",
+    "/locations",
+    "/offices",
+    "/global-offices",
+    "/where-we-are",
+]
+
 # Pages to deprioritize (blog/news/generic)
 SKIP_PATTERNS = ["/blog", "/news", "/press", "/careers", "/jobs", "/legal", "/privacy", "/terms"]
 
@@ -104,15 +114,33 @@ def select_additional_pages(base: str, already_crawled: set) -> list[str]:
     return candidates
 
 
+def crawl_location_pages(base: str, app: V1FirecrawlApp) -> dict:
+    """
+    Crawl location/contact pages specifically for office extraction.
+    Runs independently of the main page budget — stops after first 3 successful pages.
+    """
+    extra = {}
+    hits = 0
+    for path in LOCATION_PATHS:
+        if hits >= 3:
+            break
+        url = urljoin(base, path)
+        logger.info(f"[Location] Crawling: {url}")
+        content = crawl_page(app, url)
+        if content:
+            extra[url] = content
+            hits += 1
+            logger.info(f"[Location] Got {len(content)} chars from {url}")
+    return extra
+
+
 # ── Bedrock client (shared, created once) ─────────────────────────────────────
 
-AWS_PROFILE = "Website-intel-dev"
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
 
 def _get_bedrock_client():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
-    return session.client("bedrock-runtime")
+    return boto3.client("bedrock-runtime", region_name=AWS_REGION)
 
 
 def extract_company_intelligence(crawled_content: dict) -> dict:
@@ -175,6 +203,104 @@ Rules:
     return _parse_llm_json(raw)
 
 
+def extract_product_location_intelligence(crawled_content: dict) -> dict:
+    """
+    Second Bedrock pass on crawled pages (main + location-specific pages):
+    extracts Product Intelligence + Location Intelligence.
+    Returns {products, locations, country_summary} — empty lists if nothing found.
+    """
+    # Location-specific pages need a much higher char cap — a 30-office list easily
+    # exceeds 3000 chars and truncation is what causes incomplete country extraction.
+    location_keywords = ("contact", "location", "office", "where-we-are", "worldwide")
+
+    def _page_limit(url: str) -> int:
+        return 12000 if any(kw in url.lower() for kw in location_keywords) else 3000
+
+    content_blocks = "\n\n---\n\n".join(
+        f"[PAGE: {url}]\n{text[:_page_limit(url)]}"
+        for url, text in crawled_content.items()
+    )
+
+    prompt = f"""You are a business intelligence analyst. From the crawled website content below, extract structured product and location data.
+
+=== CRAWLED CONTENT ===
+{content_blocks}
+=== END OF CONTENT ===
+
+Return a single JSON object with exactly these three keys:
+
+{{
+  "products": [
+    {{
+      "name": "<product or service name>",
+      "description": "<comprehensive 2-3 sentence description: what the product does, its key features or capabilities, the core problem it solves, and its primary value proposition — drawn only from the content>",
+      "target_customers": "<explicitly mentioned target customers, or empty string if not stated>",
+      "market_category": "<market category — infer only if clearly derivable from the content>",
+      "importance": "<High | Medium | Low>",
+      "reason": "<one sentence explaining the importance level based on content prominence>"
+    }}
+  ],
+  "locations": [
+    {{
+      "country": "<country name>",
+      "cities": [
+        {{
+          "city": "<city name — use 'Unspecified' only if the country is mentioned but no city is given>",
+          "type": "<copy the exact office type label from the content — e.g. HQ, Headquarters, Engineering Center, Regional, Delivery Center, R&D, Office — use the exact wording from the source; default to Office only if no type is stated>"
+        }}
+      ]
+    }}
+  ],
+  "country_summary": [
+    {{
+      "country": "<country name>",
+      "location_count": <number of distinct city entries for this country>
+    }}
+  ]
+}}
+
+PRODUCT rules:
+- Extract each distinct product/service explicitly named in the content.
+- Description must be 2-3 full sentences. Do not truncate. Include: what it does, key features, value it delivers.
+- Importance: High = homepage/nav/flagship language; Medium = dedicated product section; Low = brief mention.
+- Do not fabricate product names or capabilities not present in the content.
+
+LOCATION rules — this is critical:
+- Scan EVERY part of the content for location signals: addresses, city names, country names, "we have offices in...", regional presence sections, footer addresses, office listing tables, "global presence" sections.
+- Extract ALL countries and cities mentioned as office locations — even if 10, 15, or 20 countries are present, list ALL of them.
+- Each distinct city in a country = a separate entry in that country's cities array.
+- If a country is listed with multiple offices (e.g., "New York, Chicago, San Francisco"), list each city separately.
+- country_summary location_count = number of city entries for that country.
+- If no location data found at all, return empty arrays.
+
+Return only valid JSON. No markdown fences, no extra commentary.
+"""
+
+    client = _get_bedrock_client()
+    body = json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "messages": [{"role": "user", "content": prompt}],
+    })
+
+    logger.info("Invoking Bedrock for product/location intelligence…")
+    response = client.invoke_model(
+        modelId=BEDROCK_MODEL_ID,
+        body=body,
+        contentType="application/json",
+        accept="application/json",
+    )
+    response_body = json.loads(response["body"].read())
+    raw = response_body["content"][0]["text"]
+
+    parsed = _parse_llm_json(raw)
+    return {
+        "products": parsed.get("products") or [],
+        "locations": parsed.get("locations") or [],
+        "country_summary": parsed.get("country_summary") or [],
+    }
+
+
 def should_recrawl(confidence_score: float, threshold: float = DEFAULT_THRESHOLD) -> bool:
     return confidence_score < threshold
 
@@ -200,6 +326,12 @@ def run_website_intelligence(url: str, threshold: float = DEFAULT_THRESHOLD, for
             cached["from_cache"] = True
             return cached
         logger.info("Cache miss — running full crawl pipeline")
+
+    # Preserve manually locked location even on force refresh
+    locked_location = None
+    existing = get_cached_intelligence(normalized)
+    if existing and existing.get("company_location_locked"):
+        locked_location = existing.get("company_location", "")
 
     crawled_content, app, base = crawl_initial_pages(normalized)
 
@@ -269,6 +401,29 @@ def run_website_intelligence(url: str, threshold: float = DEFAULT_THRESHOLD, for
     result["pages_crawled"] = pages_crawled
     result["iterations"] = iteration
     result["stop_reason"] = stop_reason
+
+    # ── Dedicated location page crawl (separate budget, for accurate office data) ──
+    logger.info("Running dedicated location page crawl…")
+    location_content = crawl_location_pages(base, app)
+    combined_for_pl = {**crawled_content, **location_content}
+
+    # ── Product & Location Intelligence (second Bedrock pass) ─────────────────
+    try:
+        logger.info("Running product/location intelligence extraction…")
+        pl_intel = extract_product_location_intelligence(combined_for_pl)
+        result["products"] = pl_intel["products"]
+        result["locations"] = pl_intel["locations"]
+        result["country_summary"] = pl_intel["country_summary"]
+    except Exception as e:
+        logger.warning(f"Product/location extraction failed (non-fatal): {e}")
+        result["products"] = []
+        result["locations"] = []
+        result["country_summary"] = []
+
+    # Restore manually locked company_location (overrides LLM extraction)
+    if locked_location is not None:
+        result["company_location"] = locked_location
+        result["company_location_locked"] = True
 
     # ── Persist to S3 + DynamoDB ──────────────────────────────────────────────
     logger.info("Saving raw markdown to S3…")

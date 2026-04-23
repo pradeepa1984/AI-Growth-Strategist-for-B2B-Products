@@ -17,14 +17,12 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
-AWS_PROFILE = "Website-intel-dev"
 AWS_REGION  = "us-east-1"
 TABLE_NAME  = "company_intelligence"
 
 
 def get_table():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
-    return session.resource("dynamodb").Table(TABLE_NAME)
+    return boto3.resource("dynamodb", region_name=AWS_REGION).Table(TABLE_NAME)
 
 
 def delete_by_url(url: str):

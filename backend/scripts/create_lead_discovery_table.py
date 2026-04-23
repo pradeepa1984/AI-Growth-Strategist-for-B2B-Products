@@ -9,14 +9,12 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
-AWS_PROFILE = "Website-intel-dev"
 AWS_REGION  = "us-east-1"
 TABLE_NAME  = "lead_discovery"
 
 
 def create_table():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
-    dynamo  = session.client("dynamodb")
+    dynamo  = boto3.client("dynamodb", region_name=AWS_REGION)
 
     existing = dynamo.list_tables()["TableNames"]
     if TABLE_NAME in existing:

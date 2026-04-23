@@ -13,14 +13,13 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 logger = logging.getLogger(__name__)
 
-AWS_PROFILE = "Website-intel-dev"
 AWS_REGION  = os.environ.get("AWS_REGION", "us-east-1")
 S3_BUCKET   = os.environ.get("S3_BUCKET")
 DYNAMO_TABLE = "company_intelligence"
 
 
 def _session():
-    return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    return boto3.Session(region_name=AWS_REGION)
 
 
 def _domain(url: str) -> str:
@@ -96,6 +95,9 @@ def save_intelligence_to_dynamodb(company_url: str, data: dict, s3_key: str | No
         "iterations":       data.get("iterations", 0),
         "stop_reason":          data.get("stop_reason", ""),
         "human_approved_ind":   "N",
+        "products":             data.get("products", []),
+        "locations":            data.get("locations", []),
+        "country_summary":      data.get("country_summary", []),
     }
 
     if s3_key:
@@ -174,13 +176,18 @@ def record_exists(company_url: str) -> bool:
 def update_intelligence(company_url: str, analysed_at: str, updates: dict) -> bool:
     """
     Update editable fields of a company_intelligence record.
-    Allowed fields: company_summary, industry, icp, services, keywords.
+    Allowed fields: company_summary, industry, company_location, icp, services, keywords.
+    When company_location is updated, company_location_locked is set to True automatically.
     """
-    ALLOWED = {"company_summary", "industry", "icp", "services", "keywords"}
+    ALLOWED = {"company_summary", "industry", "company_location", "icp", "services", "keywords"}
     filtered = {k: v for k, v in updates.items() if k in ALLOWED}
     if not filtered:
         logger.warning("update_intelligence called with no valid fields")
         return False
+
+    # Lock location if it is being manually set
+    if "company_location" in filtered:
+        filtered["company_location_locked"] = True
 
     set_parts  = [f"#f_{i} = :v_{i}" for i, k in enumerate(filtered)]
     expr_names = {f"#f_{i}": k for i, k in enumerate(filtered)}

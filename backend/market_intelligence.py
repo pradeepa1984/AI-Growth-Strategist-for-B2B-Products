@@ -13,14 +13,12 @@ from utils.scale_classifier import (
 
 logger = logging.getLogger(__name__)
 
-AWS_PROFILE    = "Website-intel-dev"
 AWS_REGION     = os.environ.get("AWS_REGION", "us-east-1")
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-haiku-20241022-v1:0")
 
 
 def _get_bedrock_client():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
-    return session.client("bedrock-runtime")
+    return boto3.client("bedrock-runtime", region_name=AWS_REGION)
 
 
 def _parse_llm_json(text: str) -> dict:

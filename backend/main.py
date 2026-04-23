@@ -4,6 +4,7 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 import os
 import re
+import json
 import logging
 import sys
 import csv as csv_module
@@ -1486,8 +1487,7 @@ class LLMTestRequest(BaseModel):
 def llm_test(request: LLMTestRequest):
     try:
         import json, boto3, os
-        session = boto3.Session(profile_name="Website-intel-dev", region_name=os.environ.get("AWS_REGION", "us-east-1"))
-        client = session.client("bedrock-runtime")
+        client = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1"))
         model_id = os.environ.get("BEDROCK_MODEL_ID")
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
@@ -1580,6 +1580,45 @@ async def linkedin_dashboard_reload(user: dict = Depends(require_auth)):
     """Force reload of both CSV caches (call after re-running the enrichment pipeline)."""
     reload_caches()
     return {"status": "ok", "message": "Caches cleared — next request will reload from disk"}
+
+
+# ── Financial data ─────────────────────────────────────────────────────────────
+
+@app.get("/api/financials")
+async def get_financials(company: str = None, user: dict = Depends(require_auth)):
+    """Return KPI data only when the requested company matches the stored financial data."""
+    try:
+        data_path = Path(__file__).parent / "data" / "financials.json"
+        with open(data_path, "r") as f:
+            data = json.load(f)
+
+        if company:
+            stored_domain = data.get("company_domain", "")
+            # Normalise incoming URL to bare domain for comparison
+            clean = company.lower()
+            for prefix in ("https://", "http://", "www."):
+                clean = clean.replace(prefix, "")
+            clean = clean.split("/")[0]  # strip path
+            if stored_domain and clean not in stored_domain and stored_domain not in clean:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"code": "NOT_FOUND", "message": "No financial data available for this company"},
+                )
+
+        return data
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Financial data file not found"},
+        )
+    except Exception:
+        logger.exception("Failed to load financials.json")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_ERROR", "message": GENERIC},
+        )
 
 
 # ── Health check ───────────────────────────────────────────────────────────────

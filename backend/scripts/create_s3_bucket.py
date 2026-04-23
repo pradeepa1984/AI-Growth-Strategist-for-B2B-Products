@@ -10,13 +10,11 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
-AWS_PROFILE = "Website-intel-dev"
 AWS_REGION  = "us-east-1"
 
 
 def create_bucket(bucket_name: str):
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
-    s3 = session.client("s3")
+    s3 = boto3.client("s3", region_name=AWS_REGION)
 
     existing = [b["Name"] for b in s3.list_buckets().get("Buckets", [])]
     if bucket_name in existing:

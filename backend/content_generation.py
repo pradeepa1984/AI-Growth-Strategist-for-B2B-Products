@@ -244,11 +244,10 @@ TONE: FRIENDLY — Apply these rules to every sentence:
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
 def _bedrock_client():
-    session = boto3.Session(
-        profile_name="Website-intel-dev",
+    return boto3.client(
+        "bedrock-runtime",
         region_name=os.environ.get("AWS_REGION", "us-east-1"),
     )
-    return session.client("bedrock-runtime")
 
 
 def _call_llm(prompt: str, max_tokens: int = 4096) -> str:

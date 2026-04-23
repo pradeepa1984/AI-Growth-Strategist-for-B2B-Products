@@ -19,7 +19,6 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 import os
 
-AWS_PROFILE = "Website-intel-dev"
 AWS_REGION  = os.environ.get("AWS_REGION", "us-east-1")
 
 TABLES = [
@@ -49,8 +48,7 @@ TABLES = [
 
 
 def create_tables():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
-    dynamo  = session.client("dynamodb")
+    dynamo  = boto3.client("dynamodb", region_name=AWS_REGION)
 
     for table_def in TABLES:
         name = table_def["TableName"]
