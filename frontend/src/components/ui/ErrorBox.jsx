@@ -11,14 +11,20 @@ export default function ErrorBox({ message, onDismiss }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+      className="flex items-start gap-3 rounded-xl px-4 py-3 text-sm"
+      style={{
+        border: "1px solid #E8A87C",
+        backgroundColor: "#FEF3E8",
+        color: "#1C2C3A",
+      }}
     >
       {/* Icon */}
       <svg
-        className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400"
+        className="mt-0.5 h-4 w-4 flex-shrink-0"
         viewBox="0 0 20 20"
         fill="currentColor"
         aria-hidden="true"
+        style={{ color: "#E8A87C" }}
       >
         <path
           fillRule="evenodd"
@@ -34,8 +40,11 @@ export default function ErrorBox({ message, onDismiss }) {
       {onDismiss && (
         <button
           onClick={onDismiss}
-          className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors"
+          className="flex-shrink-0 transition-colors"
           aria-label="Dismiss error"
+          style={{ color: "#E8A87C" }}
+          onMouseEnter={e => e.currentTarget.style.color = "#c4835a"}
+          onMouseLeave={e => e.currentTarget.style.color = "#E8A87C"}
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />

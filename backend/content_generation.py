@@ -13,6 +13,7 @@ import re
 from datetime import datetime, timezone
 
 import boto3
+import anthropic
 
 logger = logging.getLogger(__name__)
 
@@ -243,25 +244,40 @@ TONE: FRIENDLY — Apply these rules to every sentence:
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
+_USE_BEDROCK     = os.getenv("USE_BEDROCK", "false").lower() == "true"
+_BEDROCK_MODEL   = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-haiku-20241022-v1:0")
+_ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-4-6")
+
+
 def _bedrock_client():
-    session = boto3.Session(
-        profile_name="Website-intel-dev",
-        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+    profile = os.environ.get("AWS_PROFILE")
+    session = (
+        boto3.Session(profile_name=profile, region_name=os.environ.get("AWS_REGION", "us-east-1"))
+        if profile
+        else boto3.Session(region_name=os.environ.get("AWS_REGION", "us-east-1"))
     )
     return session.client("bedrock-runtime")
 
 
 def _call_llm(prompt: str, max_tokens: int = 4096) -> str:
-    client   = _bedrock_client()
-    model_id = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-haiku-20241022-v1:0")
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
-    })
-    response      = client.invoke_model(modelId=model_id, body=body, contentType="application/json", accept="application/json")
-    response_body = json.loads(response["body"].read())
-    return response_body["content"][0]["text"]
+    if _USE_BEDROCK:
+        client = _bedrock_client()
+        body   = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        })
+        response      = client.invoke_model(modelId=_BEDROCK_MODEL, body=body, contentType="application/json", accept="application/json")
+        response_body = json.loads(response["body"].read())
+        return response_body["content"][0]["text"]
+    else:
+        client  = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        message = client.messages.create(
+            model=_ANTHROPIC_MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text
 
 
 # ── Prompt Builder ─────────────────────────────────────────────────────────────

@@ -22,6 +22,14 @@ build/
 venv/
 env/
 
+# Data / business files
+*.xlsx
+*.docx
+*.pdf
+Genisights/
+backend/data/financials.json
+Ephanti_GTM_Strategy_Report.md
+
 # Node / React
 node_modules/
 dist/

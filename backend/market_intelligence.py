@@ -4,6 +4,8 @@ import logging
 import re
 
 import boto3
+import anthropic
+
 from utils.scale_classifier import (
     enrich_competitors_with_scale,
     filter_competitors_by_scale,
@@ -13,15 +15,58 @@ from utils.scale_classifier import (
 
 logger = logging.getLogger(__name__)
 
-AWS_PROFILE    = "Website-intel-dev"
-AWS_REGION     = os.environ.get("AWS_REGION", "us-east-1")
+# ── Config ─────────────────────────────────────────────────────────────────────
+USE_BEDROCK      = os.getenv("USE_BEDROCK", "false").lower() == "true"
+AWS_REGION       = os.environ.get("AWS_REGION", "us-east-1")
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-haiku-20241022-v1:0")
+ANTHROPIC_MODEL  = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-4-6")
 
+
+# ── Bedrock client (kept intact, used when USE_BEDROCK=true) ──────────────────
 
 def _get_bedrock_client():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    profile = os.environ.get("AWS_PROFILE")
+    session = (
+        boto3.Session(profile_name=profile, region_name=AWS_REGION)
+        if profile
+        else boto3.Session(region_name=AWS_REGION)
+    )
     return session.client("bedrock-runtime")
 
+
+# ── LLM dispatcher ─────────────────────────────────────────────────────────────
+# USE_BEDROCK=true  → AWS Bedrock  (local dev)
+# USE_BEDROCK=false → Anthropic API (ECS default)
+
+def _call_llm(prompt: str, max_tokens: int = 800, temperature: float = 0.2) -> str:
+    if USE_BEDROCK:
+        client = _get_bedrock_client()
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+        })
+        response = client.invoke_model(
+            modelId=BEDROCK_MODEL_ID,
+            body=body,
+            contentType="application/json",
+            accept="application/json",
+        )
+        response_body = json.loads(response["body"].read())
+        return response_body["content"][0]["text"]
+    else:
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        message = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _parse_llm_json(text: str) -> dict:
     text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
@@ -30,10 +75,6 @@ def _parse_llm_json(text: str) -> dict:
 
 
 def _validate_market_strategy(strategy: dict) -> dict:
-    """
-    Enforce schema for market_strategy. Raises ValueError with a clear message
-    if any required key or item shape is missing.
-    """
     required_scales = ["large_scale", "mid_scale", "small_scale"]
     required_levels = ["global", "india"]
 
@@ -61,16 +102,12 @@ def _validate_market_strategy(strategy: dict) -> dict:
 
 
 def _get_best_fit_scale(ci_data: dict) -> str:
-    """
-    Deterministically infer the best-fit scale from ICP keywords.
-    Returns one of: 'large_scale', 'mid_scale', 'small_scale'.
-    """
-    icp_text = " ".join(ci_data.get("icp", [])).lower()
+    icp_text     = " ".join(ci_data.get("icp", [])).lower()
     summary_text = (ci_data.get("company_summary") or "").lower()
-    combined = icp_text + " " + summary_text
+    combined     = icp_text + " " + summary_text
 
     enterprise_signals = ["enterprise", "large company", "corporation", "fortune", "global", "multinational"]
-    startup_signals = ["startup", "sme", "small business", "small and medium", "niche", "early stage", "bootstrapped"]
+    startup_signals    = ["startup", "sme", "small business", "small and medium", "niche", "early stage", "bootstrapped"]
 
     if any(k in combined for k in enterprise_signals):
         return "large_scale"
@@ -136,24 +173,23 @@ Return exactly this JSON structure:
 """
 
 
+# ── generate_market_strategy — Bedrock only (detailed strategy, not in main MI flow) ──
+
 def generate_market_strategy(ci_data: dict, target_segments: list = None) -> dict:
     """
-    Use Claude (via AWS Bedrock) to generate a multi-scale, two-level
-    market expansion strategy (global regions + India-specific cities/clusters).
-    Retries once if the first response fails schema validation.
-    Appends a deterministic 'best_fit_scale' field based on ICP signals.
+    Detailed multi-scale market expansion strategy.
+    Routes to Bedrock or direct Anthropic API via _call_llm dispatcher.
+    Uses retry + strict schema validation.
     """
     industry = ci_data.get("industry", "Unknown")
     icp      = ", ".join(ci_data.get("icp", []))
     keywords = ", ".join(ci_data.get("keywords", []))
     segments = ", ".join(s.get("segment", "") for s in (target_segments or []))
 
-    client = _get_bedrock_client()
     last_error = None
 
     for attempt in range(2):
         prompt = _build_strategy_prompt(industry, icp, segments, keywords)
-        # On the retry, prepend a stricter reminder so the model self-corrects
         if attempt == 1:
             prompt = (
                 "IMPORTANT: Your previous response was missing required fields. "
@@ -161,22 +197,16 @@ def generate_market_strategy(ci_data: dict, target_segments: list = None) -> dic
                 "(large_scale, mid_scale, small_scale). Do not omit any section.\n\n"
             ) + prompt
 
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1500,
-            "messages": [{"role": "user", "content": prompt}],
-        })
-
-        logger.info(f"Invoking Bedrock for Market Strategy (attempt {attempt + 1})")
-        response = client.invoke_model(
-            modelId=BEDROCK_MODEL_ID,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
+        logger.info(
+            "Invoking LLM for Market Strategy (attempt %d, USE_BEDROCK=%s)",
+            attempt + 1, USE_BEDROCK,
         )
-
-        response_body = json.loads(response["body"].read())
-        raw = response_body["content"][0]["text"]
+        try:
+            raw = _call_llm(prompt, max_tokens=1500, temperature=0.2)
+        except Exception as e:
+            last_error = e
+            logger.warning("Market strategy LLM call failed on attempt %d: %s", attempt + 1, e)
+            continue
 
         try:
             strategy = _validate_market_strategy(_parse_llm_json(raw))
@@ -184,25 +214,17 @@ def generate_market_strategy(ci_data: dict, target_segments: list = None) -> dic
             return strategy
         except (ValueError, KeyError, json.JSONDecodeError) as e:
             last_error = e
-            logger.warning(f"Market strategy attempt {attempt + 1} failed validation: {e}")
+            logger.warning("Market strategy attempt %d failed validation: %s", attempt + 1, e)
 
     raise ValueError(f"Market strategy generation failed after 2 attempts: {last_error}")
 
 
+# ── refresh_content_topics ─────────────────────────────────────────────────────
+
 def refresh_content_topics(ci_data: dict, keyword_clusters: list[dict]) -> list[dict]:
     """
     Regenerate content topics when keyword clusters change.
-
-    Called by the /api/refresh-content-topics endpoint when a user edits
-    keyword clusters in the Market Intelligence UI. Ensures content topics
-    remain aligned with the updated cluster themes.
-
-    Args:
-        ci_data:          Company Intelligence dict (for context)
-        keyword_clusters: Updated list of {cluster_name, keywords[]} dicts
-
-    Returns:
-        New content_topics list: [{title, angle}]
+    Uses the LLM dispatcher (Bedrock or direct API depending on USE_BEDROCK).
     """
     cluster_summary = "\n".join(
         f"- {c['cluster_name']}: {', '.join(c.get('keywords', []))}"
@@ -236,136 +258,105 @@ Return a JSON array only:
 
 CRITICAL: Return ONLY valid JSON. No markdown, no explanation."""
 
-    client = _get_bedrock_client()
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1500,
-        "messages": [{"role": "user", "content": prompt}],
-    })
-
-    logger.info("Refreshing content topics based on updated keyword clusters")
-    response = client.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        body=body,
-        contentType="application/json",
-        accept="application/json",
-    )
-    response_body = json.loads(response["body"].read())
-    raw = response_body["content"][0]["text"]
-
+    logger.info("Refreshing content topics (USE_BEDROCK=%s)", USE_BEDROCK)
     try:
+        raw    = _call_llm(prompt, max_tokens=800, temperature=0.2)
         topics = _parse_llm_json(raw)
         if isinstance(topics, list):
             return topics
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"Failed to parse refreshed content topics: {e}")
+        logger.error("Failed to parse refreshed content topics: %s", e)
 
     return []
 
 
+# ── run_market_intelligence ────────────────────────────────────────────────────
+
 def run_market_intelligence(ci_data: dict) -> dict:
     """
-    Given approved Company Intelligence data, use Claude (via AWS Bedrock) to
-    generate market intelligence: keyword clusters, content topics,
-    target segments, and top competitors.
+    Fast single-call market intelligence generation.
+    Routes to Bedrock (USE_BEDROCK=true) or direct Anthropic API (default).
+    No retry — returns partial output on parse failure.
     """
-    prompt = f"""You are a B2B market intelligence analyst.
-
-Based on the following approved company intelligence, generate actionable market intelligence.
-
-=== COMPANY INTELLIGENCE ===
-Company Name: {ci_data.get('company_name', 'Unknown')}
-Industry: {ci_data.get('industry', 'Unknown')}
-Summary: {ci_data.get('company_summary', '')}
-Services: {', '.join(ci_data.get('services', []))}
-ICP (Target Customers): {', '.join(ci_data.get('icp', []))}
-Keywords: {', '.join(ci_data.get('keywords', []))}
-=== END ===
-
-Return a single JSON object with exactly these fields:
-
-{{
-  "keyword_clusters": [
-    {{"cluster_name": "<theme name>", "keywords": ["<kw1>", "<kw2>", "<kw3>"]}}
-  ],
-  "content_topics": [
-    {{"title": "<content/blog title>", "angle": "<brief description of the hook or angle>"}}
-  ],
-  "target_segments": [
-    {{"segment": "<segment name>", "pain_point": "<key problem this company solves for them>", "message": "<positioning message>"}}
-  ],
-  "top_competitors": [
-    {{"name": "<competitor name>", "differentiator": "<how this company differs from them>", "scale": "<Startup|Mid-size|Enterprise>"}}
-  ]
-}}
-
-Requirements:
-- keyword_clusters: 3–5 clusters, each with 3–6 keywords. Group by theme (e.g. "Automation", "Integration").
-- content_topics: 5–8 realistic blog/content ideas tailored to this company's ICP and services.
-- target_segments: 3–5 segments drawn from the ICP, each with a pain point and a positioning message.
-- top_competitors: 3–5 REALISTIC direct competitors. Each competitor MUST have:
-  {{
-    "name": "<competitor name>",
-    "differentiator": "<how this company differs from them>",
-    "scale": "<Startup|Mid-size|Enterprise>"
-  }}
-  Scale definitions: Startup = <50 employees, Mid-size = 50–500, Enterprise = 500+.
-  Constraints:
-  (a) EXACT same industry vertical — not generic IT, cloud, or consulting firms.
-  (b) Directly overlapping product/service.
-  (c) Similar ICP — same buyer type and company size.
-  (d) "scale" MUST be one of: "Startup", "Mid-size", "Enterprise".
-  (e) Be real and verifiable — prefer niche, domain-specific vendors.
-  If fewer than 3 realistic competitors can be identified, list only those that qualify.
-- Base all output on the provided data. Do not hallucinate facts not present.
-- Return only valid JSON with no markdown fences or extra commentary.
-"""
-
-    client = _get_bedrock_client()
-
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 2000,
-        "messages": [{"role": "user", "content": prompt}],
-    })
-
-    logger.info(f"Invoking Bedrock for Market Intelligence: {BEDROCK_MODEL_ID}")
-    response = client.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        body=body,
-        contentType="application/json",
-        accept="application/json",
+    company_summary = (
+        f"Company: {ci_data.get('company_name', 'Unknown')}\n"
+        f"Industry: {ci_data.get('industry', 'Unknown')}\n"
+        f"Summary: {ci_data.get('company_summary', '')}\n"
+        f"Services: {', '.join(ci_data.get('services', []))}\n"
+        f"ICP: {', '.join(ci_data.get('icp', []))}\n"
+        f"Keywords: {', '.join(ci_data.get('keywords', []))}"
     )
 
-    response_body = json.loads(response["body"].read())
-    raw = response_body["content"][0]["text"]
-    result = _parse_llm_json(raw)
-    result["market_strategy"] = generate_market_strategy(
-        ci_data, target_segments=result.get("target_segments")
+    prompt = f"""Generate concise market intelligence.
+Return JSON:
+- keyword_clusters (3 items, each: {{"cluster_name": "...", "keywords": [...]}})
+- content_topics (3 items, each: {{"title": "...", "angle": "..."}})
+- target_segments (3 items, each: {{"segment": "...", "pain_point": "...", "message": "..."}})
+- pain_points (5 short strings)
+- top_competitors (3 items, each: {{"name": "...", "differentiator": "...", "scale": "Startup|Mid-size|Enterprise"}})
+- market_expansion_strategy (3 bullet points as strings)
+
+Keep output SHORT.
+
+Company:
+{company_summary}
+
+Return only valid JSON, no markdown."""
+
+    logger.info(
+        "MI generation — USE_BEDROCK=%s model=%s",
+        USE_BEDROCK,
+        BEDROCK_MODEL_ID if USE_BEDROCK else ANTHROPIC_MODEL,
     )
 
-    # ── Scale-classify and re-rank competitors ────────────────────────────────
-    # 1. Detect this company's own scale from CI
-    company_scale_result = classify_company_scale_from_ci(ci_data)
-    company_scale        = company_scale_result["scale"]
+    _empty = {
+        "keyword_clusters": [], "content_topics": [], "target_segments": [],
+        "pain_points": [], "top_competitors": [], "market_expansion_strategy": [],
+    }
 
-    # 2. Enrich each competitor with a scale classification
+    try:
+        raw = _call_llm(prompt, max_tokens=2000, temperature=0.2)
+    except Exception as e:
+        logger.error("MI LLM call failed: %s", e)
+        raise
+
+    try:
+        result = _parse_llm_json(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("MI JSON parse failed: %s\nRaw response: %.500s", e, raw)
+        raise ValueError(f"Market intelligence JSON parse failed: {e}")
+
+    # Guard: if the LLM returned all-empty arrays the response was truncated — fail loudly
+    if (
+        not result.get("keyword_clusters")
+        and not result.get("content_topics")
+        and not result.get("target_segments")
+        and not result.get("top_competitors")
+    ):
+        logger.error("MI LLM returned all-empty arrays (likely truncated). Raw: %.500s", raw)
+        raise ValueError("Market intelligence generation returned empty data — please try again.")
+
+    # Scale-classify competitors (pure Python, no LLM calls)
     raw_competitors = result.get("top_competitors", [])
-    enriched_competitors = enrich_competitors_with_scale(raw_competitors)
+    if raw_competitors and isinstance(raw_competitors[0], dict):
+        company_scale_result = classify_company_scale_from_ci(ci_data)
+        company_scale        = company_scale_result["scale"]
+        enriched  = enrich_competitors_with_scale(raw_competitors)
+        filtered  = filter_competitors_by_scale(enriched, company_scale)
+        ranked    = rank_competitors(
+            filtered, company_scale,
+            ci_data.get("icp", []), ci_data.get("services", []),
+        )
+        result["top_competitors"]            = ranked
+        result["company_scale"]              = company_scale
+        result["company_scale_confidence"]   = company_scale_result["confidence"]
 
-    # 3. Filter to same/adjacent scale (keeps ≥2 competitors as safety floor)
-    filtered_competitors = filter_competitors_by_scale(enriched_competitors, company_scale)
-
-    # 4. Re-rank by ICP + service + scale relevance
-    ranked_competitors = rank_competitors(
-        filtered_competitors,
-        company_scale=company_scale,
-        ci_icp=ci_data.get("icp", []),
-        ci_services=ci_data.get("services", []),
-    )
-
-    result["top_competitors"]  = ranked_competitors
-    result["company_scale"]    = company_scale
-    result["company_scale_confidence"] = company_scale_result["confidence"]
+    # Generate detailed market expansion strategy (nested scale/region structure)
+    try:
+        market_strategy = generate_market_strategy(ci_data, result.get("target_segments"))
+        result["market_strategy"] = market_strategy
+    except Exception as e:
+        logger.warning("Market strategy generation failed (non-fatal): %s", e)
+        result["market_strategy"] = None
 
     return result

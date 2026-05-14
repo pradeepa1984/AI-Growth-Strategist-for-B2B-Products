@@ -23,10 +23,12 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # ── File paths ─────────────────────────────────────────────────────────────────
-_ROOT = Path(__file__).resolve().parent.parent.parent          # AI_Growth_Strategist/
+# Resolves to /app/data/ in ECS (backend/ is copied to /app/ by Dockerfile)
+# and to backend/data/ in local dev.
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
-APOLLO_CSV_PATH = _ROOT / "L&D Managers Chief Distribution contacts (1).csv"
-KS_CSV_PATH     = _ROOT / "linkedin_pipeline" / "enriched_leads.csv"
+APOLLO_CSV_PATH = _DATA_DIR / "leads.csv"
+KS_CSV_PATH     = _DATA_DIR / "enriched_leads.csv"
 
 # ── In-memory cache (loaded once per server process) ──────────────────────────
 _apollo_cache: list[dict] | None = None

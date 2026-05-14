@@ -13,14 +13,18 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 logger = logging.getLogger(__name__)
 
-AWS_PROFILE = "Website-intel-dev"
-AWS_REGION  = os.environ.get("AWS_REGION", "us-east-1")
-S3_BUCKET   = os.environ.get("S3_BUCKET")
-DYNAMO_TABLE = "company_intelligence"
+AWS_PROFILE  = os.environ.get("AWS_PROFILE")          # None in ECS → uses IAM task role
+AWS_REGION   = os.environ.get("AWS_REGION", "us-east-1")
+S3_BUCKET    = os.environ.get("S3_BUCKET")
+DYNAMO_TABLE = os.environ.get("DYNAMODB_TABLE_NAME", "company_intelligence")
 
 
 def _session():
-    return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    return (
+        boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+        if AWS_PROFILE
+        else boto3.Session(region_name=AWS_REGION)
+    )
 
 
 def _domain(url: str) -> str:
@@ -223,7 +227,7 @@ def approve_intelligence(company_url: str, analysed_at: str) -> bool:
 
 # ── Market Intelligence Cache ──────────────────────────────────────────────────
 
-MI_TABLE = "market_intelligence"
+MI_TABLE = os.environ.get("MI_TABLE_NAME", "market_intelligence")
 
 
 def save_market_intelligence_to_dynamodb(company_url: str, data: dict) -> bool:
@@ -279,7 +283,7 @@ def get_cached_market_intelligence(company_url: str) -> dict | None:
 
 # ── Content Generation Cache ───────────────────────────────────────────────────
 
-CG_TABLE = "content_generation"
+CG_TABLE = os.environ.get("CG_TABLE_NAME", "content_generation")
 
 
 def save_content_generation_to_dynamodb(company_url: str, topic: str, data: dict) -> bool:
@@ -343,7 +347,7 @@ def get_cached_content_generation(company_url: str, topic: str, content_type: st
 
 # ── Lead Discovery ─────────────────────────────────────────────────────────────
 
-LEADDISCOVERY_TABLE = "leaddiscovery"
+LEADDISCOVERY_TABLE = os.environ.get("LEADDISCOVERY_TABLE_NAME", "leaddiscovery")
 
 
 def _serialize_for_dynamo(obj):

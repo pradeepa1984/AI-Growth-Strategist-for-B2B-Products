@@ -7,18 +7,18 @@ import MarketIntelligencePage from "./components/MarketIntelligencePage";
 import ContentGenerationPage from "./components/ContentGenerationPage";
 import LinkedInDashboardPage from "./components/LinkedInDashboardPage";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
+import ReportGeneratorPanel from "./components/ReportGeneratorPanel";
 
 const PlaceholderPage = ({ title }) => (
-  <div className="flex-1 min-h-screen flex items-center justify-center" style={{ backgroundColor: "#F6E5FF" }}>
+  <div className="flex-1 min-h-screen flex items-center justify-center" style={{ backgroundColor: "#E8F4F9" }}>
     <div className="text-center space-y-2">
-      <p className="text-lg font-bold text-gray-700">{title}</p>
-      <p className="text-sm text-gray-500">Coming soon</p>
+      <p className="text-lg font-bold" style={{ color: "#1C2C3A" }}>{title}</p>
+      <p className="text-sm" style={{ color: "#2E4057" }}>Coming soon</p>
     </div>
   </div>
 );
 
 function App() {
-  // Restore session from localStorage on page refresh
   const [user, setUser] = useState(() => {
     if (isLoggedIn()) {
       return localStorage.getItem("cognito_user_email") || "user";
@@ -43,13 +43,11 @@ function App() {
     return <SignInPage onSignIn={handleSignIn} />;
   }
 
-  // Called by MarketIntelligencePage when CI is missing/unapproved.
   const handleRedirectToCI = (url) => {
     setPrefillUrl(url);
     setActivePage("company-intelligence");
   };
 
-  // Called by MarketIntelligencePage "Create Content" button.
   const handleNavigateToContentGeneration = () => {
     setActivePage("content-generation");
   };
@@ -59,7 +57,7 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" style={{ backgroundColor: "#E8F4F9" }}>
       <Sidebar active={activePage} onSelect={setActivePage} />
 
       <div className="flex-1">
@@ -96,6 +94,19 @@ function App() {
             user={user}
             onSignOut={handleSignOut}
           />
+        )}
+        {activePage === "report-generation" && (
+          <div className="min-h-screen" style={{ backgroundColor: "#E8F4F9" }}>
+            <div className="max-w-2xl mx-auto px-8 pt-10 pb-6">
+              <div className="mb-6">
+                <h1 className="text-xl font-bold tracking-tight" style={{ color: "#0B4F43" }}>Report Generation</h1>
+                <p className="text-xs mt-1" style={{ color: "#2E4057" }}>
+                  Generate a Company Analysis PDF from your Company Intelligence and Market Intelligence data.
+                </p>
+              </div>
+              <ReportGeneratorPanel />
+            </div>
+          </div>
         )}
       </div>
     </div>

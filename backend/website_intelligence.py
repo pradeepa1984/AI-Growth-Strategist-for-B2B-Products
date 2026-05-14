@@ -5,6 +5,7 @@ import re
 from urllib.parse import urljoin, urlparse
 
 import boto3
+import anthropic
 from firecrawl import V1FirecrawlApp
 from utils.firecrawl_client import get_firecrawl_app
 from utils.aws_storage import save_markdown_to_s3, save_intelligence_to_dynamodb, get_cached_intelligence
@@ -104,15 +105,47 @@ def select_additional_pages(base: str, already_crawled: set) -> list[str]:
     return candidates
 
 
-# ── Bedrock client (shared, created once) ─────────────────────────────────────
+# ── LLM config ────────────────────────────────────────────────────────────────
 
-AWS_PROFILE = "Website-intel-dev"
-AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+USE_BEDROCK      = os.getenv("USE_BEDROCK", "false").lower() == "true"
+AWS_PROFILE      = os.environ.get("AWS_PROFILE")
+AWS_REGION       = os.environ.get("AWS_REGION", "us-east-1")
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+ANTHROPIC_MODEL  = os.environ.get("ANTHROPIC_MODEL_ID", "claude-sonnet-4-6")
+
 
 def _get_bedrock_client():
-    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    session = (
+        boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+        if AWS_PROFILE
+        else boto3.Session(region_name=AWS_REGION)
+    )
     return session.client("bedrock-runtime")
+
+
+def _call_llm(prompt: str, max_tokens: int = 1500) -> str:
+    """Dispatch to Bedrock (local) or Anthropic API (ECS) based on USE_BEDROCK."""
+    if USE_BEDROCK:
+        client = _get_bedrock_client()
+        body   = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        })
+        response      = client.invoke_model(
+            modelId=BEDROCK_MODEL_ID, body=body,
+            contentType="application/json", accept="application/json",
+        )
+        response_body = json.loads(response["body"].read())
+        return response_body["content"][0]["text"]
+    else:
+        client  = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        message = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text
 
 
 def extract_company_intelligence(crawled_content: dict) -> dict:
@@ -154,24 +187,9 @@ Rules:
 - Return only valid JSON with no markdown fences or extra commentary.
 """
 
-    client = _get_bedrock_client()
-
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1500,
-        "messages": [{"role": "user", "content": prompt}],
-    })
-
-    logger.info(f"Invoking Bedrock model: {BEDROCK_MODEL_ID}")
-    response = client.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        body=body,
-        contentType="application/json",
-        accept="application/json",
-    )
-
-    response_body = json.loads(response["body"].read())
-    raw = response_body["content"][0]["text"]
+    logger.info("CI extraction — USE_BEDROCK=%s model=%s", USE_BEDROCK,
+                BEDROCK_MODEL_ID if USE_BEDROCK else ANTHROPIC_MODEL)
+    raw = _call_llm(prompt, max_tokens=1500)
     return _parse_llm_json(raw)
 
 

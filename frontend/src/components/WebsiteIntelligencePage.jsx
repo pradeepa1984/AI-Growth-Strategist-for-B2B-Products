@@ -8,15 +8,19 @@ import { apiPost } from "../api/client";
 
 const ConfidencePill = ({ value }) => {
   const percent = Math.round(value * 100);
-  const color =
+  // High ≥80%: teal; Medium ≥60%: amber-gold; Low: red
+  const style =
     percent >= 80
-      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+      ? { backgroundColor: "#CCF2E8", color: "#0B4F43", border: "1px solid #5DD4B0" }
       : percent >= 60
-      ? "bg-amber-100 text-amber-800 border border-amber-300"
-      : "bg-red-100 text-red-700 border border-red-300";
+      ? { backgroundColor: "#FEF3E8", color: "#E8A87C", border: "1px solid #E8A87C" }
+      : { backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fca5a5" };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold ${color}`}>
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold"
+      style={style}
+    >
       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
       {percent}% Confidence
     </span>
@@ -30,11 +34,8 @@ const normalizeUrl = (input) => {
 };
 
 const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
-  // Pull shared state from context so data survives navigation away and back.
   const { ciData, setCiData, ciUrl, setCiUrl, ciSubmitted, setCiSubmitted } = useAppContext();
 
-  // Seed local state from context (restores data when user navigates back).
-  // initialUrl takes priority when a redirect arrives from Market Intelligence.
   const [companyInput, setCompanyInput] = useState(initialUrl || ciUrl);
 
   useEffect(() => {
@@ -47,7 +48,6 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
   const [isEditing, setIsEditing]     = useState(false);
   const [editForm, setEditForm]       = useState({});
   const [saving, setSaving]           = useState(false);
-  // Show tracker immediately if we already have data (restored from context).
   const [showTracker, setShowTracker] = useState(!!ciData);
 
   const fetchIntelligence = async (url, forceRefresh = false) => {
@@ -57,7 +57,6 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
       const result = await apiPost("/api/website-intelligence", { url, force_refresh: forceRefresh });
       setData(result);
       setSubmitted(true);
-      // Persist to context so Market Intelligence (and navigation back) can use it.
       setCiData(result);
       setCiUrl(url);
       setCiSubmitted(true);
@@ -106,7 +105,6 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
     setData(null);
     setError("");
     setShowTracker(false);
-    // Also clear global context so Market Intelligence knows CI was reset.
     setCiData(null);
     setCiUrl("");
     setCiSubmitted(false);
@@ -161,24 +159,34 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
     }
   };
 
+  const inputStyle = {
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #D4EDE6",
+    borderRadius: "8px",
+    color: "#1C2C3A",
+  };
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#F6E5FF" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#E8F4F9" }}>
 
       {/* Top bar */}
-      <div className="border-b border-[#b8a898] px-8 h-14 flex items-center justify-between overflow-visible" style={{ backgroundColor: "#F2DFFF" }}>
+      <div
+        className="px-8 h-14 flex items-center justify-between overflow-visible"
+        style={{ backgroundColor: "#FFFFFF", borderBottom: "1px solid #D4EDE6" }}
+      >
         <div className="flex items-center gap-3">
-          <div className="w-2 h-4 bg-gray-700 rounded-sm" />
-          <span className="text-sm font-bold text-gray-800 tracking-tight">AI Growth Strategist</span>
+          <div className="w-2 h-4 rounded-sm" style={{ backgroundColor: "#1A9E7A" }} />
+          <span className="text-sm font-bold tracking-tight" style={{ color: "#0B4F43" }}>AI Growth Strategist</span>
         </div>
         <div className="flex items-center gap-4">
           {user && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-600 font-medium">👤 {user}</span>
+              <span className="text-xs font-medium" style={{ color: "#2E4057" }}>👤 {user}</span>
               <button
                 onClick={onSignOut}
                 title="Sign Out"
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-700 border border-[#b8a898] hover:bg-[#d4c4b4] active:scale-95 transition-all"
-                style={{ backgroundColor: "#F2DFFF" }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold active:scale-95 transition-all"
+                style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#2E4057" }}
               >
                 ⎋ Sign Out
               </button>
@@ -193,15 +201,14 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
         {/* Page Header + Search inline */}
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-tight">
+            <h1 className="text-xl font-bold tracking-tight leading-tight" style={{ color: "#0B4F43" }}>
               Company Intelligence
             </h1>
-            <p className="text-xs text-gray-600 mt-0.5">
+            <p className="text-xs mt-0.5" style={{ color: "#2E4057" }}>
               Enter a company website URL to generate an AI-powered profile.
             </p>
           </div>
 
-          {/* Search Bar */}
           <div className="flex gap-2 w-[480px] shrink-0">
             <input
               type="text"
@@ -209,51 +216,51 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
               onChange={(e) => setCompanyInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               placeholder="e.g. inubesolutions.com"
-              className="flex-1 border border-[#b8a898] rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#b8a898]"
-              style={{ backgroundColor: "#F2DFFF" }}
+              className="flex-1 px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0]"
+              style={inputStyle}
               disabled={loading}
             />
             <button
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className="px-4 py-2 rounded-lg text-sm font-bold text-gray-800 border-2 border-[#7aaa7a] shadow-md hover:shadow-lg hover:brightness-105 active:scale-95 active:shadow-sm transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: "#BFD8B8" }}
+              className="px-4 py-2 text-sm font-bold text-white shadow-md hover:shadow-lg active:scale-95 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: "#1A9E7A", borderRadius: "8px", boxShadow: "0 4px 12px rgba(26,158,122,0.30)" }}
             >
               {loading ? "Analysing…" : "Analyse"}
             </button>
           </div>
         </div>
 
-        {/* Progress Tracker */}
         {showTracker && <ProgressTracker statuses={trackerStatuses} />}
 
         {/* Loading state */}
         {loading && (
-          <div className="rounded-xl border border-[#b8a898] shadow-sm p-10 flex flex-col items-center gap-4" style={{ backgroundColor: "#F2DFFF" }}>
-            <svg className="animate-spin h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24">
+          <div className="rounded-xl shadow-sm p-10 flex flex-col items-center gap-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #D4EDE6" }}>
+            <svg className="animate-spin h-8 w-8" style={{ color: "#1A9E7A" }} fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
             </svg>
-            <p className="text-sm font-semibold text-gray-700">Analysing website…</p>
-            <div className="flex flex-col items-center gap-1 text-xs text-gray-500">
+            <p className="text-sm font-semibold" style={{ color: "#1C2C3A" }}>Analysing website…</p>
+            <div className="flex flex-col items-center gap-1 text-xs" style={{ color: "#2E4057" }}>
               <span>① Crawling key pages (homepage, about, services)</span>
               <span>② Extracting intelligence with AI</span>
               <span>③ Evaluating confidence &amp; refining if needed</span>
             </div>
-            <p className="text-xs text-gray-400 mt-1">This usually takes 15–30 seconds</p>
+            <p className="text-xs mt-1" style={{ color: "#2E4057" }}>This usually takes 15–30 seconds</p>
           </div>
         )}
 
         {/* Error state */}
         {!loading && error && (
-          <div className="rounded-xl border border-red-300 shadow-sm p-6 flex flex-col items-center gap-3" style={{ backgroundColor: "#fff5f5" }}>
+          <div className="rounded-xl shadow-sm p-6 flex flex-col items-center gap-3" style={{ backgroundColor: "#FEF3E8", border: "1px solid #E8A87C" }}>
             <span className="text-2xl">⚠️</span>
-            <p className="text-sm font-semibold text-red-700">Analysis failed</p>
-            <p className="text-xs text-red-600 text-center max-w-md">{error}</p>
+            <p className="text-sm font-semibold" style={{ color: "#1C2C3A" }}>Analysis failed</p>
+            <p className="text-xs text-center max-w-md" style={{ color: "#2E4057" }}>{error}</p>
             <button
               onClick={handleSubmit}
-              className="mt-1 px-4 py-1.5 rounded-lg text-xs font-semibold text-red-700 border border-red-300 hover:bg-red-100 transition-all"
+              className="mt-1 px-4 py-1.5 text-xs font-semibold transition-all"
+              style={{ borderRadius: "8px", color: "#E8A87C", border: "1px solid #E8A87C", backgroundColor: "#FFFFFF" }}
             >
               ↺ Try again
             </button>
@@ -262,10 +269,10 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
 
         {/* Empty state */}
         {!loading && !error && !submitted && (
-          <div className="rounded-xl border border-dashed border-[#b8a898] p-12 flex flex-col items-center gap-3 text-center">
+          <div className="rounded-xl p-12 flex flex-col items-center gap-3 text-center" style={{ backgroundColor: "#FFFFFF", border: "1px solid #D4EDE6", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
             <span className="text-3xl">🔍</span>
-            <p className="text-sm font-semibold text-gray-600">No results yet</p>
-            <p className="text-xs text-gray-400 max-w-sm">
+            <p className="text-sm font-semibold" style={{ color: "#0B4F43" }}>No results yet</p>
+            <p className="text-xs max-w-sm" style={{ color: "#2E4057" }}>
               Enter a company website URL above and click <strong>Analyse</strong> to generate an AI-powered company intelligence profile.
             </p>
           </div>
@@ -275,12 +282,12 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
         {!loading && submitted && data && (
           <>
             {/* Meta row */}
-            <div className="flex items-center justify-between border-b border-[#b8a898] pb-2">
+            <div className="flex items-center justify-between pb-2" style={{ borderBottom: "1px solid #D4EDE6" }}>
               <div className="flex items-center gap-3">
-                <p className="text-sm font-bold text-gray-900">{companyInput}</p>
-                <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">— AI Profile</span>
+                <p className="text-sm font-bold" style={{ color: "#1C2C3A" }}>{companyInput}</p>
+                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "#2E4057" }}>— AI Profile</span>
                 {data.from_cache && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: "#CCF2E8", color: "#0B4F43", borderRadius: "6px" }}>
                     ⚡ Loaded from cache
                   </span>
                 )}
@@ -288,20 +295,19 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
               <ConfidencePill value={data.confidence_score} />
             </div>
 
-            {/* Two-column grid — sections paired in rows so hr lines align */}
-            <div className="rounded-xl border border-[#b8a898] shadow-sm overflow-hidden" style={{ backgroundColor: "#ffffff" }}>
-              <div className="grid grid-cols-2 divide-x divide-[#b8a898]">
+            {/* Two-column grid */}
+            <div className="rounded-xl overflow-hidden" style={{ backgroundColor: "#FFFFFF", border: "1px solid #D4EDE6", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}>
+              <div className="grid grid-cols-2 divide-x" style={{ borderColor: "#D4EDE6" }}>
 
-                {/* Row 1 */}
                 <div className="p-4">
                   <SectionCard title="Company Summary">
                     {isEditing ? (
                       <textarea rows={5} value={editForm.company_summary}
                         onChange={e => setEditForm(f => ({ ...f, company_summary: e.target.value }))}
-                        className="w-full text-xs text-gray-800 rounded-lg px-3 py-2 border border-[#b8a898] focus:outline-none focus:ring-2 focus:ring-[#b8a898] resize-none"
-                        style={{ backgroundColor: "#f5f0eb" }} />
+                        className="w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0] resize-none"
+                        style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#1C2C3A" }} />
                     ) : (
-                      <p className="text-gray-800 text-xs leading-5">{data.company_summary}</p>
+                      <p className="text-xs leading-5" style={{ color: "#1C2C3A" }}>{data.company_summary}</p>
                     )}
                   </SectionCard>
                 </div>
@@ -311,71 +317,69 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
                       <input type="text" value={editForm.services}
                         onChange={e => setEditForm(f => ({ ...f, services: e.target.value }))}
                         placeholder="Comma-separated values"
-                        className="w-full text-xs text-gray-800 rounded-lg px-3 py-2 border border-[#b8a898] focus:outline-none focus:ring-2 focus:ring-[#b8a898]"
-                        style={{ backgroundColor: "#f5f0eb" }} />
+                        className="w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0]"
+                        style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#1C2C3A" }} />
                     ) : (
                       <TagList tags={data.services} variant="cool" />
                     )}
                   </SectionCard>
                 </div>
 
-                {/* Row 2 */}
-                <div className="p-4 border-t border-[#b8a898]">
+                <div className="p-4" style={{ borderTop: "1px solid #D4EDE6" }}>
                   <SectionCard title="Industry">
                     {isEditing ? (
                       <input type="text" value={editForm.industry}
                         onChange={e => setEditForm(f => ({ ...f, industry: e.target.value }))}
-                        className="w-full text-sm text-gray-800 rounded-lg px-3 py-2 border border-[#b8a898] focus:outline-none focus:ring-2 focus:ring-[#b8a898]"
-                        style={{ backgroundColor: "#f5f0eb" }} />
+                        className="w-full text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0]"
+                        style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#1C2C3A" }} />
                     ) : (
-                      <p className="text-gray-900 font-semibold text-sm">{data.industry}</p>
+                      <p className="font-semibold text-sm" style={{ color: "#1C2C3A" }}>{data.industry}</p>
                     )}
                   </SectionCard>
                 </div>
-                <div className="p-4 border-t border-[#b8a898]">
+                <div className="p-4" style={{ borderTop: "1px solid #D4EDE6" }}>
                   <SectionCard title="Company Location (HQ)">
                     {isEditing ? (
                       <input type="text" value={editForm.company_location}
                         onChange={e => setEditForm(f => ({ ...f, company_location: e.target.value }))}
                         placeholder="e.g. Mumbai, India"
-                        className="w-full text-sm text-gray-800 rounded-lg px-3 py-2 border border-[#b8a898] focus:outline-none focus:ring-2 focus:ring-[#b8a898]"
-                        style={{ backgroundColor: "#f5f0eb" }} />
+                        className="w-full text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0]"
+                        style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#1C2C3A" }} />
                     ) : (
-                      <p className="text-gray-900 font-semibold text-sm">
-                        {data.company_location || <span className="text-gray-400 font-normal italic text-xs">Not extracted — re-run CI or edit manually</span>}
+                      <p className="font-semibold text-sm" style={{ color: "#1C2C3A" }}>
+                        {data.company_location || <span className="font-normal italic text-xs" style={{ color: "#2E4057" }}>Not extracted — re-run CI or edit manually</span>}
                       </p>
                     )}
                   </SectionCard>
                 </div>
-                <div className="p-4 border-t border-[#b8a898]">
+                <div className="p-4" style={{ borderTop: "1px solid #D4EDE6" }}>
                   <SectionCard title="Keywords">
                     {isEditing ? (
                       <input type="text" value={editForm.keywords}
                         onChange={e => setEditForm(f => ({ ...f, keywords: e.target.value }))}
                         placeholder="Comma-separated values"
-                        className="w-full text-xs text-gray-800 rounded-lg px-3 py-2 border border-[#b8a898] focus:outline-none focus:ring-2 focus:ring-[#b8a898]"
-                        style={{ backgroundColor: "#f5f0eb" }} />
+                        className="w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0]"
+                        style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#1C2C3A" }} />
                     ) : (
                       <TagList tags={data.keywords} variant="neutral" />
                     )}
                   </SectionCard>
                 </div>
 
-                {/* Row 3 */}
-                <div className="p-4 border-t border-[#b8a898]">
+                <div className="p-4" style={{ borderTop: "1px solid #D4EDE6" }}>
                   <SectionCard title="ICP / Target Customers">
                     {isEditing ? (
                       <input type="text" value={editForm.icp}
                         onChange={e => setEditForm(f => ({ ...f, icp: e.target.value }))}
                         placeholder="Comma-separated values"
-                        className="w-full text-xs text-gray-800 rounded-lg px-3 py-2 border border-[#b8a898] focus:outline-none focus:ring-2 focus:ring-[#b8a898]"
-                        style={{ backgroundColor: "#f5f0eb" }} />
+                        className="w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5DD4B0]"
+                        style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#1C2C3A" }} />
                     ) : (
                       <TagList tags={data.icp} variant="warm" />
                     )}
                   </SectionCard>
                 </div>
-                <div className="p-4 border-t border-[#b8a898]" />
+                <div className="p-4" style={{ borderTop: "1px solid #D4EDE6" }} />
 
               </div>
             </div>
@@ -387,16 +391,16 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
                   <button
                     onClick={handleSaveEdit}
                     disabled={saving}
-                    className="flex-[2] py-2.5 rounded-xl text-sm font-extrabold text-white border-2 border-[#4a8a4a] shadow-lg hover:shadow-xl hover:brightness-105 active:scale-95 transition-all tracking-wide disabled:opacity-50"
-                    style={{ backgroundColor: "#5a9e5a" }}
+                    className="flex-[2] py-2.5 rounded-xl text-sm font-extrabold text-white shadow-lg hover:shadow-xl active:scale-95 transition-all tracking-wide disabled:opacity-50"
+                    style={{ backgroundColor: "#1A9E7A", boxShadow: "0 4px 12px rgba(26,158,122,0.30)" }}
                   >
                     {saving ? "Saving…" : "💾 Save"}
                   </button>
                   <button
                     onClick={handleCancelEdit}
                     disabled={saving}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-700 border border-[#b8a898] shadow-sm hover:shadow-md hover:brightness-105 active:scale-95 transition-all"
-                    style={{ backgroundColor: "#F2DFFF" }}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium shadow-sm hover:shadow-md active:scale-95 transition-all"
+                    style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#2E4057" }}
                   >
                     ✕ Cancel
                   </button>
@@ -406,30 +410,30 @@ const WebsiteIntelligencePage = ({ user, onSignOut, initialUrl = "" }) => {
                   <button
                     onClick={handleApprove}
                     disabled={data?.human_approved_ind === "Y"}
-                    className="flex-[2] py-2.5 rounded-xl text-sm font-extrabold text-white border-2 border-[#4a8a4a] shadow-lg hover:shadow-xl hover:brightness-105 active:scale-95 active:shadow-sm transition-all tracking-wide disabled:opacity-70 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: data?.human_approved_ind === "Y" ? "#3a7a3a" : "#5a9e5a" }}
+                    className="flex-[2] py-2.5 rounded-xl text-sm font-extrabold text-white shadow-lg hover:shadow-xl active:scale-95 transition-all tracking-wide disabled:opacity-70 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: data?.human_approved_ind === "Y" ? "#0B4F43" : "#1A9E7A", boxShadow: "0 4px 12px rgba(26,158,122,0.30)" }}
                   >
                     {data?.human_approved_ind === "Y" ? "✓ Approved" : "✓ Approve"}
                   </button>
                   <button
                     onClick={handleReRun}
                     disabled={loading}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-700 border border-[#8898c8] shadow-sm hover:shadow-md hover:brightness-105 active:scale-95 transition-all disabled:opacity-50"
-                    style={{ backgroundColor: "#C8D4F0" }}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium shadow-sm hover:shadow-md active:scale-95 transition-all disabled:opacity-50"
+                    style={{ backgroundColor: "#CCF2E8", border: "1px solid #5DD4B0", color: "#0B4F43" }}
                   >
                     ↺ Re-Run
                   </button>
                   <button
                     onClick={handleEdit}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-700 border border-[#c8a070] shadow-sm hover:shadow-md hover:brightness-105 active:scale-95 transition-all"
-                    style={{ backgroundColor: "#F0DCC8" }}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium shadow-sm hover:shadow-md active:scale-95 transition-all"
+                    style={{ backgroundColor: "#FEF3E8", border: "1px solid #E8A87C", color: "#1C2C3A" }}
                   >
                     ✎ Edit
                   </button>
                   <button
                     onClick={handleReset}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-700 border border-[#b8a898] shadow-sm hover:shadow-md hover:brightness-105 active:scale-95 transition-all"
-                    style={{ backgroundColor: "#F2DFFF" }}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium shadow-sm hover:shadow-md active:scale-95 transition-all"
+                    style={{ backgroundColor: "#E8F4F9", border: "1px solid #D4EDE6", color: "#2E4057" }}
                   >
                     ⟳ Reset
                   </button>

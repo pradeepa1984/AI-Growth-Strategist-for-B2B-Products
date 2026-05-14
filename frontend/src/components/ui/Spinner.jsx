@@ -3,10 +3,10 @@
  *
  * Usage:
  *   <Spinner />                          // default size (16px)
- *   <Spinner size={24} color="#9b72d0" />
+ *   <Spinner size={24} color="#1A9E7A" />
  *   <Spinner label="Analyzing market..." />
  */
-export default function Spinner({ size = 16, color = "currentColor", label }) {
+export default function Spinner({ size = 16, color = "#1A9E7A", label }) {
   return (
     <span className="inline-flex items-center gap-2">
       <svg
@@ -30,7 +30,7 @@ export default function Spinner({ size = 16, color = "currentColor", label }) {
           d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
         />
       </svg>
-      {label && <span className="text-sm text-gray-500">{label}</span>}
+      {label && <span className="text-sm" style={{ color: "#2E4057" }}>{label}</span>}
     </span>
   );
 }

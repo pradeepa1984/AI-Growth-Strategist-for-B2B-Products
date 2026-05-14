@@ -2,6 +2,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
+import asyncio
 import os
 import re
 import logging
@@ -15,7 +16,8 @@ from fastapi import FastAPI, HTTPException, Request, Depends
 from auth import require_auth
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from errors import CRAWL_FAILED, TIMEOUT, APOLLO_FAILED, BEDROCK_FAILED, SMTP_FAILED, GENERIC, EXTERNAL_API
 
@@ -55,8 +57,28 @@ from market_intelligence import refresh_content_topics
 from content_generation import _format_linkedin_context
 from lead_scorer import score_and_rank
 from utils.lead_enricher import enrich_and_rank as enrich_leads_simple
+from report_generation import start_report_job, get_job, register_email
 
 app = FastAPI()
+
+_extra_origins = [
+    o.strip()
+    for o in os.getenv("FRONTEND_URL", "").split(",")
+    if o.strip()
+]
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    *_extra_origins,
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ── Standard error shape ───────────────────────────────────────────────────────
@@ -99,14 +121,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"success": False, "error": {"code": "INTERNAL_ERROR", "message": GENERIC}},
     )
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 class CrawlRequest(BaseModel):
@@ -296,14 +310,17 @@ def market_intelligence(request: MarketIntelligenceRequest, user=Depends(require
         data = run_market_intelligence(ci_data)
         data["from_cache"] = False
 
-        # ── Persist to cache ───────────────────────────────────────────────────
+        # ── Persist to cache (only if data is non-empty) ───────────────────────
         save_market_intelligence_to_dynamodb(normalized, data)
 
         return data
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.error("MI generation ValueError for %s: %s", request.company_url, e)
+        raise HTTPException(status_code=500, detail={"code": "MI_GENERATION_FAILED", "message": str(e)})
     except Exception as e:
-        logger.exception("update-market-intelligence failed for %s", request.company_url)
+        logger.exception("market-intelligence failed for %s", request.company_url)
         raise HTTPException(status_code=500, detail={"code": "INTERNAL_ERROR", "message": GENERIC})
 
 
@@ -1582,8 +1599,107 @@ async def linkedin_dashboard_reload(user: dict = Depends(require_auth)):
     return {"status": "ok", "message": "Caches cleared — next request will reload from disk"}
 
 
+# ── Report Generation ─────────────────────────────────────────────────────────
+
+class GenerateReportRequest(BaseModel):
+    company_url: str
+    email: str | None = None
+
+
+@app.post("/api/generate-report")
+async def generate_report_endpoint(request: GenerateReportRequest, user=Depends(require_auth)):
+    """
+    Start a 13-section B2B AI Growth Strategy Report in the background.
+
+    Waits up to 10 seconds for quick completion.
+    Returns the full report if done; otherwise returns job_id + options.
+    """
+    try:
+        normalized = normalize_url(request.company_url)
+        ci_data = get_cached_intelligence(normalized)
+        if not ci_data:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "ci_not_found",
+                        "message": "Company Intelligence not found. Please run Company Intelligence first."},
+            )
+        mi_data = get_cached_market_intelligence(normalized)
+
+        job_id = start_report_job(ci_data, mi_data, request.email)
+
+        # Wait up to 10 s for fast completion
+        for _ in range(20):
+            await asyncio.sleep(0.5)
+            job = get_job(job_id)
+            if job["status"] == "done":
+                return {"status": "done", "job_id": job_id, "result": job["result"]}
+            if job["status"] == "error":
+                raise HTTPException(
+                    status_code=500,
+                    detail={"code": "REPORT_FAILED", "message": "Report generation failed. Please try again."},
+                )
+
+        # Still running — return options
+        return {
+            "status": "processing",
+            "job_id": job_id,
+            "progress": get_job(job_id).get("progress", 0),
+            "message": "Your report is being generated. This may take 10–20 minutes.",
+            "options": ["wait", "email"],
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("generate-report failed for %s", request.company_url)
+        raise HTTPException(status_code=500, detail={"code": "INTERNAL_ERROR", "message": GENERIC})
+
+
+@app.get("/api/report-status/{job_id}")
+async def report_status(job_id: str, user=Depends(require_auth)):
+    """Poll the status of a running report job."""
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail={"code": "JOB_NOT_FOUND", "message": "Report job not found."})
+    return {
+        "status":     job["status"],
+        "progress":   job.get("progress", 0),
+        "started_at": job.get("started_at"),
+        "result":     job.get("result") if job["status"] == "done" else None,
+        "error":      job.get("error")  if job["status"] == "error" else None,
+    }
+
+
+class ReportEmailRequest(BaseModel):
+    email: str
+
+
+@app.post("/api/report-email/{job_id}")
+async def report_register_email(job_id: str, request: ReportEmailRequest, user=Depends(require_auth)):
+    """Register an email to be notified when the report is ready."""
+    ok = register_email(job_id, request.email)
+    if not ok:
+        raise HTTPException(status_code=404, detail={"code": "JOB_NOT_FOUND", "message": "Report job not found."})
+    return {"status": "registered", "email": request.email}
+
+
 # ── Health check ───────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ── Serve React SPA — must be LAST so /api/* routes take precedence ────────────
+
+_DIST = Path(__file__).parent / "dist"
+if _DIST.is_dir():
+    _assets = _DIST / "assets"
+    if _assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        candidate = _DIST / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_DIST / "index.html"))

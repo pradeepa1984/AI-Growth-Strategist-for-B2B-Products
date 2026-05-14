@@ -1,0 +1,24 @@
+# Python virtual environment and cache — never copy into image
+backend/aivenv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Local secrets — must come from ECS Task Definition env vars
+backend/.env
+
+# Frontend build artifacts (rebuilt inside Docker; exclude from context for speed)
+frontend/node_modules/
+frontend/dist/
+
+# Git
+.git/
+**/.gitignore
+
+# Dev/docs artifacts not needed in the image
+*.md
+*.pdf
+*.png
+*.xlsx
+#linkedin_pipeline/
